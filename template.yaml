@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Apple Watch health data MCP pipeline (docs/基本設計.md). Ingest + MCP query
+  API on API Gateway HTTP API, backed by a single DynamoDB table.
+
+Parameters:
+  SecretParameterName:
+    Type: String
+    Default: /health-mcp/shared-secret
+    Description: >
+      SSM Parameter Store name for the shared Bearer secret. NOTE: this
+      SecureString parameter is NOT created by this template — CloudFormation's
+      AWS::SSM::Parameter resource does not support SecureString. Create it
+      once, out of band, before first deploy:
+        aws ssm put-parameter --name "/health-mcp/shared-secret" \
+          --type SecureString --value "<a long random value>"
+  NotificationEmail:
+    Type: String
+    Description: Email address to receive the AWS Budgets cost alert (基本設計.md §10).
+  MonthlyBudgetLimitUsd:
+    Type: Number
+    Default: 2
+    Description: Monthly cost threshold (USD) that triggers the Budgets alert.
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 29
+    MemorySize: 256
+    Environment:
+      Variables:
+        DYNAMODB_TABLE_NAME: !Ref HealthDataTable
+        SECRET_PARAMETER_NAME: !Ref SecretParameterName
+
+Resources:
+  HealthDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handlers.authorizer.app.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SecretParameterName}
+
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handlers.ingest_function.app.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref HealthDataTable
+      Events:
+        Ingest:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /ingest
+            Method: POST
+
+  McpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handlers.mcp_function.app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref HealthDataTable
+      Events:
+        Mcp:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /mcp
+            Method: ANY
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Both routes require the shared-secret authorizer (基本設計.md §1/§3).
+      Auth:
+        Authorizers:
+          SharedSecretAuthorizer:
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+            AuthorizerPayloadFormatVersion: "2.0"
+            EnableSimpleResponses: true
+            Identity:
+              Headers:
+                - Authorization
+        DefaultAuthorizer: SharedSecretAuthorizer
+      # Throttling to blunt brute-force attempts against the shared secret
+      # (基本設計.md §1/§3). Personal-scale traffic is nowhere near this.
+      RouteSettings:
+        "$default":
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 5
+
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetLimitUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+
+Outputs:
+  ApiEndpoint:
+    Description: Base URL of the HTTP API
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  HealthDataTableName:
+    Value: !Ref HealthDataTable
