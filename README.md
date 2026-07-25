@@ -13,7 +13,7 @@ Apple Watchのヘルスデータ → AWSサーバーレスパイプライン →
 
 ## 前提条件
 
-- **Apple Watch + iPhone**、および **[Health Auto Export](https://www.healthyapps.dev/)** アプリ。カスタムHTTPヘッダーを設定できる「Automations(REST API送信)」機能を使うため、**有料プランが必要な場合があります**(無料版で使えるかは各自ご確認ください)。実機で動作確認済みなのは買い切り版です。
+- **Apple Watch + iPhone**、および **[Health Auto Export](https://www.healthyapps.dev/)** アプリ。カスタムHTTPヘッダーを設定できる「Automations(REST API送信)」機能を使うため、**プレミアライセンス(年単位、または永久)が必要です**。実機で動作確認済みなのは永久ライセンス版です。
 - **AWSアカウント**。Lambda・DynamoDB・API Gateway(HTTP API)・IAMロール・AWS Budgetsを作成できるIAM権限が必要です。個人利用規模であれば月額コストはごく僅かです(docs/基本設計.md §10)。
 - **[Claude Code](https://claude.com/claude-code)** がインストール済みであること(MCPツールを実際に使う側)。
 - Gitとターミナル操作の基本知識。
