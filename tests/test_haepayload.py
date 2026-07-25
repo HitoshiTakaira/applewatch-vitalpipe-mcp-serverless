@@ -41,6 +41,21 @@ def _base_payload():
                     ],
                 },
                 {
+                    # Confirmed from a real HAE summary-mode export: rate-like metrics
+                    # arrive as an hourly Min/Avg/Max block instead of a single "qty".
+                    "name": "heart_rate",
+                    "units": "count/min",
+                    "data": [
+                        {
+                            "date": "2026-07-19 08:00:00 +0900",
+                            "Min": 60,
+                            "Avg": 62.346586961012626,
+                            "Max": 67,
+                            "source": "Apple Watch",
+                        },
+                    ],
+                },
+                {
                     "name": "sleep_analysis",
                     "units": "hr",
                     "data": [
@@ -102,6 +117,16 @@ def test_parse_payload_passthrough_metric_keeps_unit():
     assert len(step_records) == 1
     assert step_records[0]["unit"] == "count"
     assert step_records[0]["value"] == 1200.0
+
+
+def test_parse_payload_min_avg_max_uses_average():
+    result = parse_payload(_base_payload())
+
+    hr_records = [r for r in result.records if r["pk"] == "METRIC#heart_rate"]
+    assert len(hr_records) == 1
+    record = hr_records[0]
+    assert float(record["value"]) == pytest.approx(62.346586961012626)
+    assert record["unit"] == "count/min"
 
 
 def test_parse_payload_sleep_entry():

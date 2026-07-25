@@ -13,6 +13,9 @@ Expected shape:
         "metrics": [
           {"name": "active_energy", "units": "kJ",
            "data": [{"date": "2026-07-19 08:00:00 +0900", "qty": 721.3, "source": "Apple Watch"}]},
+          {"name": "heart_rate", "units": "count/min",
+           "data": [{"date": "2026-07-19 08:00:00 +0900", "Min": 60, "Avg": 62.3, "Max": 67,
+                     "source": "Apple Watch"}]},
           {"name": "sleep_analysis", "units": "hr",
            "data": [{"date": "...", "sleepStart": "...", "sleepEnd": "...",
                      "inBed": 8.0, "asleep": 7.5, "awake": 0.5,
@@ -24,6 +27,11 @@ Expected shape:
         ]
       }
     }
+
+Confirmed against a real HAE export (summary-mode automation): rate-like metrics
+such as heart_rate arrive as an hourly Min/Avg/Max block instead of a single
+`qty`. We reduce that to `Avg` to fit the single-value METRIC schema (§4/§5);
+Min/Max are discarded rather than stored separately.
 """
 
 from __future__ import annotations
@@ -45,6 +53,15 @@ ENERGY_METRIC_NAMES = {"active_energy", "basal_energy_burned"}
 
 SLEEP_METRIC_NAME = "sleep_analysis"
 DEFAULT_SOURCE = "unknown"
+
+
+def _extract_scalar_value(entry: dict[str, Any]) -> float:
+    """HAE emits either a single `qty` or an hourly Min/Avg/Max summary block
+    (observed for heart_rate in summary-mode exports). We reduce the latter
+    to its average to fit our single-value METRIC schema."""
+    if "qty" in entry:
+        return float(entry["qty"])
+    return float(entry["Avg"])
 
 
 @dataclass
@@ -105,7 +122,7 @@ def _parse_metric_entry(
     result: ParseResult,
 ) -> None:
     try:
-        raw_value = float(entry["qty"])
+        raw_value = _extract_scalar_value(entry)
         sk = to_sort_key(parse_hae_timestamp(entry["date"]))
     except Exception as exc:  # noqa: BLE001 - untrusted external payload, isolate to this entry
         result._skip("metric", entry, f"invalid entry for {name!r}: {exc}")
@@ -170,7 +187,9 @@ def _parse_workout(workout: dict[str, Any], result: ParseResult) -> None:
         return
 
     try:
-        energy_value, energy_unit = normalize_energy(float(energy["qty"]), energy.get("units", ""))
+        energy_value, energy_unit = normalize_energy(
+            _extract_scalar_value(energy), energy.get("units", "")
+        )
     except UnknownUnitError as exc:
         result._skip("workout", workout, f"{name}: {exc}")
         return
