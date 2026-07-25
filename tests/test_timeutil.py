@@ -29,3 +29,13 @@ def test_parse_query_date_naive_input_assumed_utc():
 def test_parse_query_date_invalid_raises():
     with pytest.raises(ValueError):
         parse_query_date("not-a-date")
+
+
+def test_parse_query_date_end_of_day_for_date_only_input():
+    dt = parse_query_date("2026-07-25", end_of_day=True)
+    assert (dt.hour, dt.minute, dt.second) == (23, 59, 59)
+
+
+def test_parse_query_date_end_of_day_ignored_when_time_given():
+    dt = parse_query_date("2026-07-25T10:00:00", end_of_day=True)
+    assert (dt.hour, dt.minute, dt.second) == (10, 0, 0)

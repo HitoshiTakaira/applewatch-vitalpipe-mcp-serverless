@@ -26,7 +26,7 @@ def _as_float(value: Any) -> float:
 def _validate_range(start_date: str, end_date: str) -> tuple[datetime, datetime] | dict[str, str]:
     try:
         start = parse_query_date(start_date)
-        end = parse_query_date(end_date)
+        end = parse_query_date(end_date, end_of_day=True)
     except ValueError as exc:
         return {"error": str(exc)}
     if start > end:
