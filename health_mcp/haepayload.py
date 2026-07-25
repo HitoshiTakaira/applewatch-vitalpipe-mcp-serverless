@@ -23,7 +23,7 @@ Expected shape:
         ],
         "workouts": [
           {"name": "Running", "start": "...", "end": "...",
-           "activeEnergy": {"qty": 350.0, "units": "kcal"}, "source": "Apple Watch"}
+           "activeEnergyBurned": {"qty": 350.0, "units": "kcal"}, "source": "Apple Watch"}
         ]
       }
     }
@@ -32,6 +32,14 @@ Confirmed against a real HAE export (summary-mode automation): rate-like metrics
 such as heart_rate arrive as an hourly Min/Avg/Max block instead of a single
 `qty`. We reduce that to `Avg` to fit the single-value METRIC schema (§4/§5);
 Min/Max are discarded rather than stored separately.
+
+Also confirmed on a real workout: it carries a per-minute "activeEnergy" time
+series (like "stepCount"/"basalEnergy") *and* a workout-level total under
+"activeEnergyBurned" ({"qty": ..., "units": ...}) — the field name our design
+originally guessed ("activeEnergy") was actually the per-minute series, not
+the summary, so every real workout was being skipped until this was fixed.
+We read "activeEnergyBurned" for the summary and ignore the time-series
+fields entirely (not stored — the WORKOUT record only holds the summary).
 """
 
 from __future__ import annotations
@@ -181,7 +189,10 @@ def _parse_workout(workout: dict[str, Any], result: ParseResult) -> None:
         name = workout["name"]
         start_dt = parse_hae_timestamp(workout["start"])
         end_dt = parse_hae_timestamp(workout["end"])
-        energy = workout.get("activeEnergy") or {}
+        # NOTE: "activeEnergy" on a real workout export is a per-minute time-series
+        # list (like stepCount/basalEnergy), not the workout-level total. The single
+        # qty/units summary we want is under "activeEnergyBurned" (confirmed on device).
+        energy = workout.get("activeEnergyBurned") or {}
     except Exception as exc:  # noqa: BLE001 - untrusted external payload, isolate to this entry
         result._skip("workout", workout, f"invalid workout entry: {exc}")
         return
