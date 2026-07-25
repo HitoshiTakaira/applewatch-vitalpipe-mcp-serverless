@@ -79,7 +79,19 @@ def _base_payload():
                     "name": "Running",
                     "start": "2026-07-19 07:00:00 +0900",
                     "end": "2026-07-19 07:45:00 +0900",
-                    "activeEnergy": {"qty": 350.0, "units": "kcal"},
+                    # Confirmed from a real HAE export: "activeEnergy" here is a
+                    # per-minute time series, NOT the workout summary — the
+                    # summary is "activeEnergyBurned". This list is present to
+                    # make sure the parser doesn't accidentally pick it up.
+                    "activeEnergy": [
+                        {
+                            "qty": 5.1,
+                            "units": "kcal",
+                            "date": "2026-07-19 07:01:00 +0900",
+                            "source": "Apple Watch",
+                        },
+                    ],
+                    "activeEnergyBurned": {"qty": 350.0, "units": "kcal"},
                     "source": "Apple Watch",
                 }
             ],
