@@ -6,6 +6,35 @@ Apple Watchのヘルスデータ → AWSサーバーレスパイプライン →
 
 このリポジトリをフォーク・クローンすれば、**あなた自身のApple Watch/iPhoneのヘルスデータ**を、あなた自身のAWSアカウント上にデプロイしたパイプライン経由で、Claude Codeから自然言語で問い合わせられるようになります。個人利用規模(単一ユーザー)を前提とした構成です。
 
+## システム構成
+
+```mermaid
+flowchart TD
+    iPhone["iPhone<br/>Health Auto Export"]
+    ClaudeCode["Claude Code<br/>MCP HTTP transport"]
+    APIGW["API Gateway<br/>(HTTP API)"]
+    Authorizer["Authorizer<br/>(Lambda)"]
+    SSM[("SSM Parameter Store<br/>(SecureString)")]
+    IngestFn["IngestFunction<br/>(Lambda)"]
+    McpFn["McpFunction<br/>(Lambda)"]
+    DynamoDB[("DynamoDB")]
+
+    iPhone -->|"POST(Bearer認証)"| APIGW
+    ClaudeCode -->|"Bearer認証"| APIGW
+
+    APIGW -->|"POST /ingest"| Authorizer
+    APIGW -->|"ANY /mcp"| Authorizer
+
+    Authorizer -->|"検証OK"| IngestFn
+    Authorizer -->|"検証OK"| McpFn
+    Authorizer -.->|"シークレット参照"| SSM
+
+    IngestFn -->|write| DynamoDB
+    McpFn -->|read| DynamoDB
+```
+
+iPhoneからのヘルスデータ送信(`/ingest`)と、Claude Codeからの問い合わせ(`/mcp`)は同じAPI Gateway・同じ共有シークレットで認証される、独立した2つのLambda関数です。常駐サーバーはなく、呼び出し時だけLambdaが起動します。各コンポーネントの詳細な役割・設計判断は[docs/基本設計.md](docs/基本設計.md) §1・§2を参照してください。
+
 ## できること・できないこと
 
 - できること: Claude Codeから「直近1週間のactive_energyのサマリを教えて」「最新のワークアウトの状況を教えて」のように問い合わせ、Health Auto Export経由で同期したApple Healthデータ(消費エネルギー、心拍数、睡眠、ワークアウト等)を自然言語で確認できます。
