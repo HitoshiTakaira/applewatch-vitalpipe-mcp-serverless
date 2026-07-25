@@ -102,6 +102,10 @@ Resources:
             FunctionArn: !GetAtt AuthorizerFunction.Arn
             AuthorizerPayloadFormatVersion: "2.0"
             EnableSimpleResponses: true
+            # Without this, API Gateway has no lambda:InvokeFunction permission on
+            # AuthorizerFunction — SAM does not grant it by default for HttpApi
+            # Lambda authorizers, unlike it does for HttpApi function Events.
+            EnableFunctionDefaultPermissions: true
             Identity:
               Headers:
                 - Authorization
