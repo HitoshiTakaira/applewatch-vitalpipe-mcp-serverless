@@ -80,6 +80,31 @@ def test_get_workouts_returns_list(dynamodb_table):
     assert result["workouts"][0]["duration_minutes"] == 45.0
 
 
+def test_get_workouts_includes_end_date_itself(dynamodb_table):
+    # A workout that starts well after midnight on end_date must still be
+    # included: "2026-07-25" as end_date should mean the whole day, not
+    # just up to 2026-07-25T00:00:00Z (found via a real device workout that
+    # was missing from query results because of this).
+    dynamo.put_items(
+        [
+            {
+                "pk": "WORKOUT",
+                "sk": "2026-07-25T20:02:34Z",
+                "name": "屋外 歩く",
+                "start": "2026-07-25T20:02:34Z",
+                "end": "2026-07-25T20:49:05Z",
+                "duration_minutes": Decimal("46.5"),
+                "energy_value": Decimal("160.18"),
+                "energy_unit": "kcal",
+            }
+        ]
+    )
+
+    result = queries.get_workouts("2026-07-01", "2026-07-25")
+
+    assert result["count"] == 1
+
+
 def test_get_sleep_summary_averages(dynamodb_table):
     dynamo.put_items(
         [

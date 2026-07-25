@@ -9,9 +9,11 @@ of which timezone a given export was produced in (e.g. after DST changes).
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 HAE_DATE_FORMAT = "%Y-%m-%d %H:%M:%S %z"
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def parse_hae_timestamp(raw: str) -> datetime:
@@ -26,18 +28,25 @@ def to_sort_key(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def parse_query_date(raw: str) -> datetime:
+def parse_query_date(raw: str, *, end_of_day: bool = False) -> datetime:
     """Parse a user-supplied date/datetime (MCP tool argument) into UTC.
 
     Accepts plain dates ("2026-07-01") or full ISO8601 datetimes, with or
     without a UTC offset. Naive input is assumed to already be UTC, matching
     the sk format written by the ingest path.
+
+    end_of_day: when the input is a plain date (no time component), use
+    23:59:59 instead of midnight. Without this, a range like
+    ("2026-07-01", "2026-07-25") silently excludes anything that happened on
+    2026-07-25 itself, since "2026-07-25" alone parses as that day's midnight.
     """
     text = raw.strip()
     try:
         dt = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValueError(f"invalid date: {raw!r} (expected ISO8601, e.g. 2026-07-01)") from exc
+    if end_of_day and _DATE_ONLY_RE.match(text):
+        dt = dt.replace(hour=23, minute=59, second=59)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
