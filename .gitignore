@@ -5,3 +5,4 @@ __pycache__/
 .ruff_cache/
 .aws-sam/
 samconfig.toml
+CLAUDE.md
