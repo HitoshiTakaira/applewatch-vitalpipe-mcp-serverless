@@ -12,12 +12,14 @@ Apple Watchのヘルスデータ → AWSサーバーレスパイプライン →
 flowchart TD
     iPhone["iPhone<br/>Health Auto Export"]
     ClaudeCode["Claude Code<br/>MCP HTTP transport"]
-    APIGW["API Gateway<br/>(HTTP API)"]
-    Authorizer["Authorizer<br/>(Lambda)"]
-    SSM[("SSM Parameter Store<br/>(SecureString)")]
-    IngestFn["IngestFunction<br/>(Lambda)"]
-    McpFn["McpFunction<br/>(Lambda)"]
-    DynamoDB[("DynamoDB")]
+    subgraph AWS
+        APIGW["API Gateway<br/>(HTTP API)"]
+        Authorizer["Authorizer<br/>(Lambda)"]
+        SSM[("SSM Parameter Store<br/>(SecureString)")]
+        IngestFn["IngestFunction<br/>(Lambda)"]
+        McpFn["McpFunction<br/>(Lambda)"]
+        DynamoDB[("DynamoDB")]
+    end
 
     iPhone -->|"POST(Bearer認証)"| APIGW
     ClaudeCode -->|"Bearer認証"| APIGW
